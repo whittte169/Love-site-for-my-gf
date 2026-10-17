@@ -8,40 +8,51 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #1a1a1a;
+            background-color: #0b0b0b;
             overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             font-family: 'Arial', sans-serif;
+            touch-action: none;
+            user-select: none;
         }
         #canvas-container {
             position: relative;
-            width: 600px;
-            height: 600px;
+            width: 100vw;
+            height: 100vh;
         }
         canvas {
             position: absolute;
             top: 0;
             left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #heartCanvas {
+            filter: drop-shadow(0 0 6px #FF1493) drop-shadow(0 0 15px #FF69B4);
+            will-change: transform;
+            pointer-events: none;
         }
         #name-tag {
             position: absolute;
-            top: 40px;
+            top: 12%;
             left: 50%;
             transform: translateX(-50%);
-            color: #FFB6C1;
-            font-size: 42px;
+            color: #FFF;
+            font-size: 48px;
             font-weight: bold;
             opacity: 0;
-            transition: opacity 1.5s ease-in-out;
-            text-shadow: 0 0 15px rgba(255, 182, 193, 0.6);
-            animation: pulse 2s infinite ease-in-out;
+            transition: opacity 2s ease-in-out;
+            text-shadow: 0 0 10px #FF69B4, 0 0 20px #FF69B4, 0 0 40px #FF1493;
+            animation: pulse 2.5s infinite ease-in-out;
+            z-index: 10;
+            pointer-events: none;
         }
         @keyframes pulse {
             0% { transform: translateX(-50%) scale(1); }
-            50% { transform: translateX(-50%) scale(1.08); }
+            50% { transform: translateX(-50%) scale(1.05); }
             100% { transform: translateX(-50%) scale(1); }
         }
     </style>
@@ -49,42 +60,212 @@
 <body>
     <div id="canvas-container">
         <div id="name-tag">Соня</div>
-        <canvas id="heartCanvas" width="600" height="600"></canvas>
+        <canvas id="bgCanvas"></canvas>
+        <canvas id="heartCanvas"></canvas>
     </div>
     <script>
-        const canvas = document.getElementById('heartCanvas');
-        const ctx = canvas.getContext('2d');
+        const bgCanvas = document.getElementById('bgCanvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        const heartCanvas = document.getElementById('heartCanvas');
+        const heartCtx = heartCanvas.getContext('2d');
         const nameTag = document.getElementById('name-tag');
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2 + 40;
-        const scale = 13;
-        function heartX(t) {
-            return 16 * Math.pow(Math.sin(t), 3);
+        let centerX, centerY, scale;
+        function resize() {
+            bgCanvas.width = heartCanvas.width = window.innerWidth;
+            bgCanvas.height = heartCanvas.height = window.innerHeight;
+            centerX = heartCanvas.width / 2;
+            centerY = heartCanvas.height / 2 + 40;
+            scale = Math.min(heartCanvas.width, heartCanvas.height) * 0.022;
         }
-        function heartY(t) {
-            return -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
-        }
+        window.addEventListener('resize', () => { resize(); redrawHeart(); });
+        resize();
+        function heartX(t) { return 16 * Math.pow(Math.sin(t), 3); }
+        function heartY(t) { return -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)); }
         const phrase = "Я тебя люблю ";
         const textToScale = phrase.repeat(5);
         const totalChars = textToScale.length;
         let currentCharIndex = 0;
-        ctx.fillStyle = '#FF69B4';
-        ctx.font = 'bold 15px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        let particles = [];
+        let floatingTexts = [];
+        let burstTriggered = false;
+        let heartDone = false;
+        class Particle {
+            constructor(x, y, isHeart, vx, vy) {
+                this.x = x;
+                this.y = y;
+                this.isHeart = isHeart;
+                this.size = Math.random() * 2 + 1.5;
+                this.vx = vx || (Math.random() - 0.5) * 1.2;
+                this.vy = vy || (Math.random() - 0.5) * 1.2 - 0.3;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.015 + 0.008;
+                this.color = `hsl(${Math.random() * 20 + 335}, 100%, ${Math.random() * 20 + 70}%)`;
+            }
+            draw() {
+                bgCtx.globalAlpha = this.alpha;
+                bgCtx.fillStyle = this.color;
+                if (this.isHeart) {
+                    bgCtx.font = `${this.size * 3.5}px Arial`;
+                    bgCtx.fillText('❤️', this.x, this.y);
+                } else {
+                    bgCtx.beginPath();
+                    bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    bgCtx.fill();
+                }
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+            }
+        }
+        class FloatingText {
+            constructor() {
+                this.reset(true);
+            }
+            reset(fromBottom = false) {
+                this.text = "Я люблю тебя";
+                this.isSonya = false;
+                this.x = Math.random() * (bgCanvas.width - 120) + 60;
+                this.y = fromBottom ? bgCanvas.height + 30 : -30;
+                this.vx = (Math.random() - 0.5) * 1.5;
+                this.vy = -(Math.random() * 1.2 + 0.6);
+                this.scale = 1;
+                this.targetScale = 1;
+                this.fontSize = 16;
+                this.clicked = false;
+            }
+            draw() {
+                bgCtx.save();
+                bgCtx.globalAlpha = 1;
+                if (this.isSonya) {
+                    bgCtx.fillStyle = '#FFFFFF';
+                    bgCtx.font = `bold ${this.fontSize * this.scale}px Arial`;
+                    bgCtx.shadowColor = '#FF1493';
+                    bgCtx.shadowBlur = 10;
+                } else {
+                    bgCtx.fillStyle = '#FF69B4';
+                    bgCtx.font = `bold ${this.fontSize * this.scale}px Arial`;
+                }
+                bgCtx.fillText(this.text, this.x, this.y);
+                bgCtx.restore();
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 40 || this.x > bgCanvas.width - 40) this.vx *= -1;
+                if (this.clicked) {
+                    this.scale += (this.targetScale - this.scale) * 0.2;
+                    if (Math.abs(this.scale - this.targetScale) < 0.05 && this.targetScale === 0) {
+                        this.text = "Соня";
+                        this.isSonya = true;
+                        this.targetScale = 1.4;
+                        this.vx = (Math.random() - 0.5) * 2;
+                        this.vy = -(Math.random() * 1.5 + 1);
+                    }
+                }
+                if (this.y < -50 || this.y > bgCanvas.height + 50) {
+                    this.reset(true);
+                }
+            }
+            checkClick(mx, my) {
+                if (this.clicked && this.isSonya) return false;
+                const textWidth = this.isSonya ? 50 : 110;
+                const textHeight = 25;
+                if (mx > this.x - textWidth/2 - 20 && mx < this.x + textWidth/2 + 20 &&
+                    my > this.y - textHeight/2 - 20 && my < this.y + textHeight/2 + 20) {
+                    this.clicked = true;
+                    this.targetScale = 0;
+                    return true;
+                }
+                return false;
+            }
+        }
+        function createBurst(cx, cy, count) {
+            const maxParticles = 60;
+            if (particles.length > maxParticles) return;
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 2 + 1;
+                particles.push(new Particle(cx, cy, Math.random() > 0.6, Math.cos(angle) * speed, Math.sin(angle) * speed));
+            }
+        }
+        function checkTextClick(clientX, clientY) {
+            let hit = false;
+            for (let i = 0; i < floatingTexts.length; i++) {
+                if (floatingTexts[i].checkClick(clientX, clientY)) {
+                    createBurst(clientX, clientY, 8);
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit) {
+                createBurst(clientX, clientY, 6);
+            }
+        }
+        window.addEventListener('click', (e) => {
+            if(heartDone) checkTextClick(e.clientX, e.clientY);
+            else createBurst(e.clientX, e.clientY, 6);
+        });
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                const t = e.touches[0];
+                if(heartDone) checkTextClick(t.clientX, t.clientY);
+                else createBurst(t.clientX, t.clientY, 6);
+            }
+        }, {passive: true});
+        function redrawHeart() {
+            heartCtx.clearRect(0, 0, heartCanvas.width, heartCanvas.height);
+            heartCtx.textAlign = 'center';
+            heartCtx.textBaseline = 'middle';
+            heartCtx.font = 'bold 15px Arial';
+            heartCtx.fillStyle = '#FF69B4';
+            for (let i = 0; i < currentCharIndex; i++) {
+                const t = 2 * Math.PI - (i * (2 * Math.PI / totalChars));
+                const x = centerX + heartX(t) * scale;
+                const y = centerY + heartY(t) * scale;
+                heartCtx.fillText(textToScale[i], x, y);
+            }
+        }
         function drawNextChar() {
             if (currentCharIndex >= totalChars) {
                 nameTag.style.opacity = 1;
+                if (!burstTriggered) {
+                    createBurst(centerX, centerY, 35);
+                    burstTriggered = true;
+                    heartDone = true;
+                    for (let i = 0; i < 6; i++) {
+                        floatingTexts.push(new FloatingText());
+                    }
+                }
                 return;
             }
-            const t = 2 * Math.PI - (currentCharIndex * (2 * Math.PI / totalChars));
-            const x = centerX + heartX(t) * scale;
-            const y = centerY + heartY(t) * scale;
-            ctx.fillText(textToScale[currentCharIndex], x, y);
             currentCharIndex++;
-            setTimeout(drawNextChar, 45);
+            redrawHeart();
+            setTimeout(drawNextChar, 40);
         }
-        setTimeout(drawNextChar, 500);
+        function animate() {
+            bgCtx.fillStyle = 'rgba(11, 11, 11, 0.2)';
+            bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+            if (Math.random() < 0.03 && particles.length < 20) {
+                particles.push(new Particle(Math.random() * bgCanvas.width, bgCanvas.height + 10, Math.random() > 0.7, (Math.random() - 0.5) * 0.6, -Math.random() * 1.2 - 0.5));
+            }
+            bgCtx.textAlign = 'center';
+            bgCtx.textBaseline = 'middle';
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+            for (let i = 0; i < floatingTexts.length; i++) {
+                floatingTexts[i].update();
+                floatingTexts[i].draw();
+            }
+            bgCtx.globalAlpha = 1;
+            requestAnimationFrame(animate);
+        }
+        animate();
+        setTimeout(drawNextChar, 400);
     </script>
 </body>
 </html>
