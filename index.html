@@ -50,6 +50,20 @@
             z-index: 10;
             pointer-events: none;
         }
+        #hint-tag {
+            position: absolute;
+            bottom: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #FFB6C1;
+            font-size: 18px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 2s ease-in-out;
+            text-shadow: 0 0 8px rgba(255, 105, 180, 0.6);
+            z-index: 10;
+            pointer-events: none;
+        }
         @keyframes pulse {
             0% { transform: translateX(-50%) scale(1); }
             50% { transform: translateX(-50%) scale(1.05); }
@@ -60,6 +74,7 @@
 <body>
     <div id="canvas-container">
         <div id="name-tag">Соня</div>
+        <div id="hint-tag">Нажимай на надписи!</div>
         <canvas id="bgCanvas"></canvas>
         <canvas id="heartCanvas"></canvas>
     </div>
@@ -69,6 +84,7 @@
         const heartCanvas = document.getElementById('heartCanvas');
         const heartCtx = heartCanvas.getContext('2d');
         const nameTag = document.getElementById('name-tag');
+        const hintTag = document.getElementById('hint-tag');
         let centerX, centerY, scale;
         function resize() {
             bgCanvas.width = heartCanvas.width = window.innerWidth;
@@ -124,8 +140,8 @@
                 this.reset(true);
             }
             reset(fromBottom = false) {
-                this.text = "Я люблю тебя";
-                this.isSonya = false;
+                this.text = "Соня";
+                this.isLovePhrase = false;
                 this.x = Math.random() * (bgCanvas.width - 120) + 60;
                 this.y = fromBottom ? bgCanvas.height + 30 : -30;
                 this.vx = (Math.random() - 0.5) * 1.5;
@@ -138,7 +154,7 @@
             draw() {
                 bgCtx.save();
                 bgCtx.globalAlpha = 1;
-                if (this.isSonya) {
+                if (this.isLovePhrase) {
                     bgCtx.fillStyle = '#FFFFFF';
                     bgCtx.font = `bold ${this.fontSize * this.scale}px Arial`;
                     bgCtx.shadowColor = '#FF1493';
@@ -157,9 +173,9 @@
                 if (this.clicked) {
                     this.scale += (this.targetScale - this.scale) * 0.2;
                     if (Math.abs(this.scale - this.targetScale) < 0.05 && this.targetScale === 0) {
-                        this.text = "Соня";
-                        this.isSonya = true;
-                        this.targetScale = 1.4;
+                        this.text = "Я тебя люблю";
+                        this.isLovePhrase = true;
+                        this.targetScale = 1.3;
                         this.vx = (Math.random() - 0.5) * 2;
                         this.vy = -(Math.random() * 1.5 + 1);
                     }
@@ -169,8 +185,8 @@
                 }
             }
             checkClick(mx, my) {
-                if (this.clicked && this.isSonya) return false;
-                const textWidth = this.isSonya ? 50 : 110;
+                if (this.clicked && this.isLovePhrase) return false;
+                const textWidth = this.isLovePhrase ? 110 : 50;
                 const textHeight = 25;
                 if (mx > this.x - textWidth/2 - 20 && mx < this.x + textWidth/2 + 20 &&
                     my > this.y - textHeight/2 - 20 && my < this.y + textHeight/2 + 20) {
@@ -230,6 +246,7 @@
         function drawNextChar() {
             if (currentCharIndex >= totalChars) {
                 nameTag.style.opacity = 1;
+                hintTag.style.opacity = 1;
                 if (!burstTriggered) {
                     createBurst(centerX, centerY, 35);
                     burstTriggered = true;
