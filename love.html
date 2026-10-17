@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Для Сони</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        #canvas-container {
+            position: relative;
+            width: 600px;
+            height: 600px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #name-tag {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #FFB6C1;
+            font-size: 42px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 1.5s ease-in-out;
+            text-shadow: 0 0 15px rgba(255, 182, 193, 0.6);
+            animation: pulse 2s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.08); }
+            100% { transform: translateX(-50%) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <div id="name-tag">Соня</div>
+        <canvas id="heartCanvas" width="600" height="600"></canvas>
+    </div>
+    <script>
+        const canvas = document.getElementById('heartCanvas');
+        const ctx = canvas.getContext('2d');
+        const nameTag = document.getElementById('name-tag');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2 + 40;
+        const scale = 13;
+        function heartX(t) {
+            return 16 * Math.pow(Math.sin(t), 3);
+        }
+        function heartY(t) {
+            return -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+        }
+        const phrase = "Я тебя люблю ";
+        const textToScale = phrase.repeat(5);
+        const totalChars = textToScale.length;
+        let currentCharIndex = 0;
+        ctx.fillStyle = '#FF69B4';
+        ctx.font = 'bold 15px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        function drawNextChar() {
+            if (currentCharIndex >= totalChars) {
+                nameTag.style.opacity = 1;
+                return;
+            }
+            const t = 2 * Math.PI - (currentCharIndex * (2 * Math.PI / totalChars));
+            const x = centerX + heartX(t) * scale;
+            const y = centerY + heartY(t) * scale;
+            ctx.fillText(textToScale[currentCharIndex], x, y);
+            currentCharIndex++;
+            setTimeout(drawNextChar, 45);
+        }
+        setTimeout(drawNextChar, 500);
+    </script>
+</body>
+</html>
