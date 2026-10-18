@@ -1,0 +1,350 @@
+const bgCanvas = document.getElementById('bgCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+const heartCanvas = document.getElementById('heartCanvas');
+const heartCtx = heartCanvas.getContext('2d');
+const nameTag = document.getElementById('name-tag');
+const hintTag = document.getElementById('hint-tag');
+let centerX, centerY, scale;
+
+function resize() {
+    bgCanvas.width = heartCanvas.width = window.innerWidth;
+    bgCanvas.height = heartCanvas.height = window.innerHeight;
+    centerX = heartCanvas.width / 2;
+    centerY = heartCanvas.height / 2 + 40;
+    scale = Math.min(heartCanvas.width, heartCanvas.height) * 0.022;
+}
+
+window.addEventListener('resize', () => { resize(); initSpace(); });
+
+function heartX(t) { return 16 * Math.pow(Math.sin(t), 3); }
+function heartY(t) { return -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)); }
+
+const phrase = "Я тебя люблю ";
+const textToScale = phrase.repeat(5);
+const totalChars = textToScale.length;
+let currentCharIndex = 0;
+let particles = [];
+let floatingTexts = [];
+let galaxies = [];
+let backgroundStars = [];
+let burstTriggered = false;
+let heartDone = false;
+let pulseFactor = 1;
+let pulseTime = 0;
+const lovePhrases = ["Я тебя люблю", "Ты самая лучшая", "Я люблю тебя сильнее всех на свете", "Я без тебя как луна без земли", "Моё солнце", "Ты моё всё", "Самая милая", "Счастье моё"];
+
+class BackgroundStar {
+    constructor() {
+        this.x = Math.random() * bgCanvas.width;
+        this.y = Math.random() * bgCanvas.height;
+        this.size = Math.random() * 1.5 + 0.5;
+        this.alpha = Math.random();
+        this.speed = Math.random() * 0.02 + 0.01;
+    }
+    draw() {
+        bgCtx.save();
+        bgCtx.globalAlpha = Math.abs(Math.sin(this.alpha));
+        bgCtx.fillStyle = '#FFFFFF';
+        bgCtx.beginPath();
+        bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        bgCtx.fill();
+        bgCtx.restore();
+    }
+    update() {
+        this.alpha += this.speed;
+    }
+}
+
+class Galaxy {
+    constructor() {
+        this.x = Math.random() * bgCanvas.width;
+        this.y = Math.random() * bgCanvas.height;
+        this.angle = Math.random() * Math.PI * 2;
+        this.rotSpeed = (Math.random() * 0.004 + 0.001) * (Math.random() > 0.5 ? 1 : -1);
+        this.size = Math.random() * 35 + 25;
+        this.stars = [];
+        const starCount = 150;
+        for (let i = 0; i < starCount; i++) {
+            const progress = i / starCount;
+            const t = Math.random() * Math.PI * 2;
+            const distFactor = Math.pow(progress, 1.5);
+            const angleOffset = progress * 4.5;
+            this.stars.push({
+                t: t,
+                dist: distFactor,
+                angleOffset: angleOffset,
+                size: Math.random() * 1.2 + 0.4,
+                opacity: Math.random() * 0.4 + 0.4,
+                isCore: progress < 0.12,
+                color: progress < 0.15 ? '#FFFFFF' : `hsl(${Math.random() * 40 + 320}, 100%, ${Math.random() * 20 + 70}%)`
+            });
+        }
+    }
+    draw() {
+        bgCtx.save();
+        bgCtx.translate(this.x, this.y);
+        bgCtx.rotate(this.angle);
+        for (let i = 0; i < this.stars.length; i++) {
+            const s = this.stars[i];
+            let hx = heartX(s.t) * this.size * 0.06 * s.dist;
+            let hy = heartY(s.t) * this.size * 0.06 * s.dist;
+            const cos = Math.cos(s.angleOffset);
+            const sin = Math.sin(s.angleOffset);
+            const rx = hx * cos - hy * sin;
+            const ry = hx * sin + hy * cos;
+            bgCtx.save();
+            bgCtx.globalAlpha = s.opacity;
+            bgCtx.fillStyle = s.color;
+            if (s.isCore) {
+                bgCtx.shadowBlur = 6;
+                bgCtx.shadowColor = '#FF69B4';
+                bgCtx.beginPath();
+                bgCtx.arc(rx, ry, s.size * 1.4, 0, Math.PI * 2);
+                bgCtx.fill();
+            } else {
+                bgCtx.beginPath();
+                bgCtx.arc(rx, ry, s.size, 0, Math.PI * 2);
+                bgCtx.fill();
+            }
+            bgCtx.restore();
+        }
+        bgCtx.restore();
+    }
+    update() {
+        this.angle += this.rotSpeed;
+        this.y -= 0.12;
+        if (this.y < -this.size * 2) {
+            this.y = bgCanvas.height + this.size * 2;
+            this.x = Math.random() * bgCanvas.width;
+        }
+    }
+}
+
+function initSpace() {
+    galaxies = [];
+    backgroundStars = [];
+    const count = Math.min(4, Math.floor((bgCanvas.width * bgCanvas.height) / 200000));
+    for (let i = 0; i < Math.max(2, count); i++) galaxies.push(new Galaxy());
+    for (let i = 0; i < 70; i++) backgroundStars.push(new BackgroundStar());
+}
+
+resize();
+initSpace();
+
+class Particle {
+    constructor(x, y, isHeart, vx, vy) {
+        this.x = x;
+        this.y = y;
+        this.isHeart = isHeart;
+        this.size = Math.random() * 2 + 1.5;
+        this.vx = vx || (Math.random() - 0.5) * 1.2;
+        this.vy = vy || (Math.random() - 0.5) * 1.2 - 0.3;
+        this.alpha = 1;
+        this.decay = Math.random() * 0.015 + 0.008;
+        this.color = `hsl(${Math.random() * 20 + 335}, 100%, ${Math.random() * 20 + 70}%)`;
+    }
+    draw() {
+        bgCtx.globalAlpha = this.alpha;
+        bgCtx.fillStyle = this.color;
+        if (this.isHeart) {
+            bgCtx.font = `${this.size * 3.5}px Arial`;
+            bgCtx.fillText('❤️', this.x, this.y);
+        } else {
+            bgCtx.beginPath();
+            bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            bgCtx.fill();
+        }
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= this.decay;
+    }
+}
+
+function createBurst(cx, cy, count) {
+    const maxParticles = 60;
+    if (particles.length > maxParticles) return;
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 2 + 1;
+        particles.push(new Particle(cx, cy, Math.random() > 0.6, Math.cos(angle) * speed, Math.sin(angle) * speed));
+    }
+}
+class FloatingText {
+    constructor() {
+        this.reset(true);
+    }
+    reset(fromBottom = false) {
+        this.text = "Соня";
+        this.isLovePhrase = false;
+        this.x = Math.random() * (bgCanvas.width - 160) + 80;
+        this.y = fromBottom ? bgCanvas.height + 30 : -30;
+        this.vx = (Math.random() - 0.5) * 1.2;
+        this.vy = -(Math.random() * 1.0 + 0.5);
+        this.scale = 1;
+        this.targetScale = 1;
+        this.fontSize = 16;
+        this.clicked = false;
+    }
+    draw() {
+        bgCtx.save();
+        bgCtx.globalAlpha = 1;
+        if (this.isLovePhrase) {
+            bgCtx.fillStyle = '#FFFFFF';
+            bgCtx.font = `bold ${this.fontSize * this.scale}px Arial`;
+            bgCtx.shadowColor = '#FF1493';
+            bgCtx.shadowBlur = 10;
+        } else {
+            bgCtx.fillStyle = '#FF69B4';
+            bgCtx.font = `bold ${this.fontSize * this.scale}px Arial`;
+        }
+        bgCtx.fillText(this.text, this.x, this.y);
+        bgCtx.restore();
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < 50 || this.x > bgCanvas.width - 50) this.vx *= -1;
+        if (this.clicked) {
+            this.scale += (this.targetScale - this.scale) * 0.2;
+            if (Math.abs(this.scale - this.targetScale) < 0.05 && this.targetScale === 0) {
+                const randomIndex = Math.floor(Math.random() * lovePhrases.length);
+                this.text = lovePhrases[randomIndex];
+                this.isLovePhrase = true;
+                this.targetScale = this.text.length > 20 ? 1.0 : 1.3;
+                this.vx = (Math.random() - 0.5) * 1.5;
+                this.vy = -(Math.random() * 1.2 + 0.8);
+            }
+        }
+        if (this.y < -50 || this.y > bgCanvas.height + 50) {
+            this.reset(true);
+        }
+    }
+    checkClick(mx, my) {
+        if (this.clicked && this.isLovePhrase) return false;
+        const textWidth = this.isLovePhrase ? 180 : 50;
+        const textHeight = 25;
+        if (mx > this.x - textWidth/2 - 25 && mx < this.x + textWidth/2 + 25 &&
+            my > this.y - textHeight/2 - 25 && my < this.y + textHeight/2 + 25) {
+            this.clicked = true;
+            this.targetScale = 0;
+            return true;
+        }
+        return false;
+    }
+}
+
+function checkTextClick(clientX, clientY) {
+    let hit = false;
+    for (let i = 0; i < floatingTexts.length; i++) {
+        if (floatingTexts[i].checkClick(clientX, clientY)) {
+            createBurst(clientX, clientY, 8);
+            hit = true;
+            break;
+        }
+    }
+    if (!hit) {
+        createBurst(clientX, clientY, 6);
+    }
+}
+
+window.addEventListener('click', (e) => {
+    if(heartDone) checkTextClick(e.clientX, e.clientY);
+    else createBurst(e.clientX, e.clientY, 6);
+});
+
+window.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 0) {
+        const t = e.touches[0];
+        if(heartDone) checkTextClick(t.clientX, t.clientY);
+        else createBurst(t.clientX, t.clientY, 6);
+    }
+}, {passive: true});
+
+function redrawHeart() {
+    heartCtx.clearRect(0, 0, heartCanvas.width, heartCanvas.height);
+    const currentScale = scale * pulseFactor;
+    if (heartDone) {
+        const grad = heartCtx.createRadialGradient(centerX, centerY, 0, centerX, centerY, currentScale * 15);
+        grad.addColorStop(0, 'rgba(255, 20, 147, 0.45)');
+        grad.addColorStop(0.3, 'rgba(255, 105, 180, 0.25)');
+        grad.addColorStop(0.7, 'rgba(255, 20, 147, 0.05)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        heartCtx.fillStyle = grad;
+        heartCtx.beginPath();
+        for (let i = 0; i <= totalChars; i++) {
+            const t = (i / totalChars) * 2 * Math.PI;
+            const x = centerX + heartX(t) * currentScale;
+            const y = centerY + heartY(t) * currentScale;
+            if (i === 0) heartCtx.moveTo(x, y); else heartCtx.lineTo(x, y);
+        }
+        heartCtx.fill();
+    }
+    heartCtx.textAlign = 'center';
+    heartCtx.textBaseline = 'middle';
+    heartCtx.font = 'bold 15px Arial';
+    heartCtx.fillStyle = '#FF69B4';
+    for (let i = 0; i < currentCharIndex; i++) {
+        const t = 2 * Math.PI - (i * (2 * Math.PI / totalChars));
+        const x = centerX + heartX(t) * currentScale;
+        const y = centerY + heartY(t) * currentScale;
+        heartCtx.fillText(textToScale[i], x, y);
+    }
+}
+
+function drawNextChar() {
+    if (currentCharIndex >= totalChars) {
+        nameTag.style.opacity = 1;
+        hintTag.style.opacity = 1;
+        if (!burstTriggered) {
+            createBurst(centerX, centerY, 35);
+            burstTriggered = true;
+            heartDone = true;
+            for (let i = 0; i < 6; i++) {
+                floatingTexts.push(new FloatingText());
+            }
+        }
+        return;
+    }
+    currentCharIndex++;
+    redrawHeart();
+    setTimeout(drawNextChar, 35);
+}
+
+function animate() {
+    bgCtx.fillStyle = 'rgba(3, 3, 8, 0.25)';
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+    for (let i = 0; i < backgroundStars.length; i++) {
+        backgroundStars[i].update();
+        backgroundStars[i].draw();
+    }
+    for (let i = 0; i < galaxies.length; i++) {
+        galaxies[i].update();
+        galaxies[i].draw();
+    }
+    if (heartDone) {
+        pulseTime += 0.04;
+        pulseFactor = 1 + 0.04 * Math.sin(pulseTime * 2);
+        redrawHeart();
+    }
+    if (Math.random() < 0.03 && particles.length < 20) {
+        particles.push(new Particle(Math.random() * bgCanvas.width, bgCanvas.height + 10, Math.random() > 0.7, (Math.random() - 0.5) * 0.6, -Math.random() * 1.2 - 0.5));
+    }
+    bgCtx.textAlign = 'center';
+    bgCtx.textBaseline = 'middle';
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        particles[i].draw();
+        if (particles[i].alpha <= 0) particles.splice(i, 1);
+    }
+    for (let i = 0; i < floatingTexts.length; i++) {
+        floatingTexts[i].update();
+        floatingTexts[i].draw();
+    }
+    bgCtx.globalAlpha = 1;
+    requestAnimationFrame(animate);
+}
+
+animate();
+setTimeout(drawNextChar, 400);
