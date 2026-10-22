@@ -4,19 +4,28 @@ const heartCanvas = document.getElementById('heartCanvas');
 const heartCtx = heartCanvas.getContext('2d');
 const nameTag = document.getElementById('name-tag');
 const hintTag = document.getElementById('hint-tag');
+const counterTag = document.getElementById('counter-tag');
+const musicBtn = document.getElementById('music-btn');
+const canvas3d = document.getElementById('canvas3d');
 let centerX, centerY, scale;
+let mouseX = 0, mouseY = 0;
+const audio = new Audio('music.mp3');
+audio.loop = true;
+audio.volume = 0.4;
+let musicStarted = false;
 function resize() {
     bgCanvas.width = heartCanvas.width = window.innerWidth;
     bgCanvas.height = heartCanvas.height = window.innerHeight;
     centerX = heartCanvas.width / 2;
-    centerY = heartCanvas.height / 2 + 40;
-    scale = Math.min(heartCanvas.width, heartCanvas.height) * 0.022;
+    centerY = heartCanvas.height / 2 + (window.innerWidth < 768 ? 20 : 40);
+    const baseDimension = Math.min(heartCanvas.width, heartCanvas.height);
+    scale = baseDimension * (window.innerWidth < 768 ? 0.015 : 0.022);
 }
 window.addEventListener('resize', () => { resize(); initSpace(); });
 function heartX(t) { return 16 * Math.pow(Math.sin(t), 3); }
 function heartY(t) { return -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)); }
 const phrase = "Я тебя люблю ";
-const textToScale = phrase.repeat(5);
+const textToScale = phrase.repeat(window.innerWidth < 768 ? 3 : 5);
 const totalChars = textToScale.length;
 let currentCharIndex = 0;
 let particles = [];
@@ -28,7 +37,34 @@ let burstTriggered = false;
 let heartDone = false;
 let pulseFactor = 1;
 let pulseTime = 0;
+const startDate = new Date(2026, 9, 17, 21, 0, 0);
 const lovePhrases = ["Я тебя люблю", "Ты самая лучшая", "Я люблю тебя сильнее всех на свете", "Я без тебя как луна без земли", "Моё солнце", "Ты моё всё", "Самая милая", "Счастье моё", "Ты моя вселенная", "Самая прекрасная улыбка"];
+function pluralize(num, one, two, many) {
+    let n = Math.abs(num);
+    n %= 100;
+    if (n >= 5 && n <= 20) return many;
+    n %= 10;
+    if (n === 1) return one;
+    if (n >= 2 && n <= 4) return two;
+    return many;
+}
+function updateCounter() {
+    const now = new Date();
+    const diff = now - startDate;
+    if (diff < 0) {
+        counterTag.innerHTML = "Космический отсчет запущен...";
+        return;
+    }
+    const seconds = Math.floor((diff / 1000) % 60);
+    const minutes = Math.floor((diff / 1000 / 60) % 60);
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const dTxt = pluralize(days, "день", "дня", "дней");
+    const hTxt = pluralize(hours, "час", "часа", "часов");
+    const mTxt = pluralize(minutes, "минуту", "минуты", "минут");
+    const sTxt = pluralize(seconds, "секунду", "секунды", "секунд");
+    counterTag.innerHTML = `Мы вместе уже:<br>${days} ${dTxt}, ${hours} ${hTxt}, ${minutes} ${mTxt} и ${seconds} ${sTxt}`;
+}
 class BackgroundStar {
     constructor() {
         this.x = Math.random() * bgCanvas.width;
@@ -46,14 +82,10 @@ class BackgroundStar {
         bgCtx.fill();
         bgCtx.restore();
     }
-    update() {
-        this.alpha += this.speed;
-    }
+    update() { this.alpha += this.speed; }
 }
 class ShootingStar {
-    constructor() {
-        this.reset();
-    }
+    constructor() { this.reset(); }
     reset() {
         this.x = Math.random() * bgCanvas.width;
         this.y = Math.random() * (bgCanvas.height * 0.4);
@@ -97,7 +129,7 @@ class Galaxy {
         this.rotSpeed = (Math.random() * 0.004 + 0.001) * (Math.random() > 0.5 ? 1 : -1);
         this.size = Math.random() * 35 + 25;
         this.stars = [];
-        const starCount = 150;
+        const starCount = window.innerWidth < 768 ? 80 : 150;
         for (let i = 0; i < starCount; i++) {
             const progress = i / starCount;
             const t = Math.random() * Math.PI * 2;
@@ -157,9 +189,11 @@ function initSpace() {
     galaxies = [];
     backgroundStars = [];
     shootingStars = [];
-    const count = Math.min(4, Math.floor((bgCanvas.width * bgCanvas.height) / 200000));
+    const maxGalaxies = window.innerWidth < 768 ? 2 : 4;
+    const count = Math.min(maxGalaxies, Math.floor((bgCanvas.width * bgCanvas.height) / 200000));
     for (let i = 0; i < Math.max(2, count); i++) galaxies.push(new Galaxy());
-    for (let i = 0; i < 70; i++) backgroundStars.push(new BackgroundStar());
+    const starCount = window.innerWidth < 768 ? 40 : 70;
+    for (let i = 0; i < starCount; i++) backgroundStars.push(new BackgroundStar());
     for (let i = 0; i < 2; i++) shootingStars.push(new ShootingStar());
 }
 resize();
@@ -177,6 +211,7 @@ class Particle {
         this.color = `hsl(${Math.random() * 20 + 335}, 100%, ${Math.random() * 20 + 70}%)`;
     }
     draw() {
+        bgCtx.save();
         bgCtx.globalAlpha = this.alpha;
         bgCtx.fillStyle = this.color;
         if (this.isHeart) {
@@ -187,15 +222,22 @@ class Particle {
             bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             bgCtx.fill();
         }
+        bgCtx.restore();
     }
     update() {
         this.x += this.vx;
         this.y += this.vy;
+        if (heartDone) {
+            const dx = centerX - this.x;
+            const dy = centerY - this.y;
+            this.x += dx * 0.002;
+            this.y += dy * 0.002;
+        }
         this.alpha -= this.decay;
     }
 }
 function createBurst(cx, cy, count) {
-    const maxParticles = 120;
+    const maxParticles = window.innerWidth < 768 ? 60 : 120;
     if (particles.length > maxParticles) return;
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
@@ -204,9 +246,7 @@ function createBurst(cx, cy, count) {
     }
 }
 class FloatingText {
-    constructor() {
-        this.reset(true);
-    }
+    constructor() { this.reset(true); }
     reset(fromBottom = false) {
         this.text = "Соня";
         this.isLovePhrase = false;
@@ -216,7 +256,7 @@ class FloatingText {
         this.vy = -(Math.random() * 1.0 + 0.5);
         this.scale = 1;
         this.targetScale = 1;
-        this.fontSize = 16;
+        this.fontSize = window.innerWidth < 768 ? 14 : 16;
         this.clicked = false;
     }
     draw() {
@@ -249,9 +289,7 @@ class FloatingText {
                 this.vy = -(Math.random() * 1.2 + 0.8);
             }
         }
-        if (this.y < -50 || this.y > bgCanvas.height + 50) {
-            this.reset(true);
-        }
+        if (this.y < -50 || this.y > bgCanvas.height + 50) { this.reset(true); }
     }
     checkClick(mx, my) {
         if (this.clicked && this.isLovePhrase) return false;
@@ -275,12 +313,29 @@ function checkTextClick(clientX, clientY) {
             break;
         }
     }
-    if (!hit) {
-        createBurst(clientX, clientY, 6);
+    if (!hit) createBurst(clientX, clientY, 6);
+}
+function toggleMusic() {
+    if (!musicStarted) {
+        audio.play().catch(e => console.log("Интеракция необходима"));
+        musicStarted = true;
+        musicBtn.innerHTML = "⏸️";
+        musicBtn.style.background = "#FF1493";
+    } else {
+        if (audio.paused) {
+            audio.play();
+            musicBtn.innerHTML = "⏸️";
+        } else {
+            audio.pause();
+            musicBtn.innerHTML = "🎵";
+            musicBtn.style.background = "rgba(255, 20, 147, 0.15)";
+        }
     }
 }
+musicBtn.onclick = (e) => { e.stopPropagation(); toggleMusic(); };
 window.addEventListener('click', (e) => {
-    if(heartDone) checkTextClick(e.clientX, e.clientY);
+    if (!musicStarted) { toggleMusic(); }
+    if (heartDone) checkTextClick(e.clientX, e.clientY);
     else createBurst(e.clientX, e.clientY, 6);
 });
 window.addEventListener('mousemove', (e) => {
@@ -289,18 +344,19 @@ window.addEventListener('mousemove', (e) => {
     }
 });
 window.addEventListener('touchstart', (e) => {
+    if (!musicStarted) { toggleMusic(); }
     if (e.touches.length > 0) {
         const t = e.touches[0];
-        if(heartDone) checkTextClick(t.clientX, t.clientY);
+        if (heartDone) checkTextClick(t.clientX, t.clientY);
         else createBurst(t.clientX, t.clientY, 6);
     }
-}, {passive: true});
+}, { passive: true });
 window.addEventListener('touchmove', (e) => {
     if (e.touches.length > 0 && Math.random() < 0.15) {
         const t = e.touches[0];
         particles.push(new Particle(t.clientX, t.clientY, false, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4));
     }
-}, {passive: true});
+}, { passive: true });
 function redrawHeart() {
     heartCtx.clearRect(0, 0, heartCanvas.width, heartCanvas.height);
     const currentScale = scale * pulseFactor;
@@ -322,7 +378,7 @@ function redrawHeart() {
     }
     heartCtx.textAlign = 'center';
     heartCtx.textBaseline = 'middle';
-    heartCtx.font = 'bold 15px Arial';
+    heartCtx.font = `bold ${window.innerWidth < 768 ? '11px' : '15px'} Arial`;
     heartCtx.fillStyle = '#FF69B4';
     for (let i = 0; i < currentCharIndex; i++) {
         const t = 2 * Math.PI - (i * (2 * Math.PI / totalChars));
@@ -334,20 +390,20 @@ function redrawHeart() {
 function drawNextChar() {
     if (currentCharIndex >= totalChars) {
         nameTag.style.opacity = 1;
+        counterTag.style.opacity = 1;
         hintTag.style.opacity = 1;
         if (!burstTriggered) {
-            createBurst(centerX, centerY, 45);
+            createBurst(centerX, centerY, window.innerWidth < 768 ? 25 : 45);
             burstTriggered = true;
             heartDone = true;
-            for (let i = 0; i < 7; i++) {
-                floatingTexts.push(new FloatingText());
-            }
+            const textCount = window.innerWidth < 768 ? 4 : 7;
+            for (let i = 0; i < textCount; i++) floatingTexts.push(new FloatingText());
         }
         return;
     }
     currentCharIndex++;
     redrawHeart();
-    setTimeout(drawNextChar, 35);
+    setTimeout(drawNextChar, window.innerWidth < 768 ? 25 : 35);
 }
 function animate() {
     bgCtx.fillStyle = 'rgba(3, 3, 8, 0.25)';
@@ -376,6 +432,7 @@ function animate() {
         pulseTime += 0.04;
         pulseFactor = 1 + 0.04 * Math.sin(pulseTime * 2);
         redrawHeart();
+        updateCounter();
     }
     if (Math.random() < 0.03 && particles.length < 30) {
         particles.push(new Particle(Math.random() * bgCanvas.width, bgCanvas.height + 10, Math.random() > 0.7, (Math.random() - 0.5) * 0.6, -Math.random() * 1.2 - 0.5));
@@ -394,5 +451,82 @@ function animate() {
     bgCtx.globalAlpha = 1;
     requestAnimationFrame(animate);
 }
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 30;
+const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, alpha: true, antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xff69b4, 1.5);
+directionalLight.position.set(5, 5, 5);
+scene.add(directionalLight);
+function create3DHeartGeometry() {
+    const heartShape = new THREE.Shape();
+    heartShape.moveTo(0, 0);
+    heartShape.bezierCurveTo(0, 2.5, -2.5, 4.5, -5, 4.5);
+    heartShape.bezierCurveTo(-8.5, 4.5, -8.5, 1, -8.5, 1);
+    heartShape.bezierCurveTo(-8.5, -2, -6.5, -5, 0, -9.5);
+    heartShape.bezierCurveTo(6.5, -5, 8.5, -2, 8.5, 1);
+    heartShape.bezierCurveTo(8.5, 1, 8.5, 4.5, 5, 4.5);
+    heartShape.bezierCurveTo(2.5, 4.5, 0, 2.5, 0, 0);
+    const extrudeSettings = { depth: 2, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.8, bevelThickness: 0.5 };
+    const geometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
+    geometry.center();
+    return geometry;
+}
+const heartGeometry = create3DHeartGeometry();
+const heartMaterial = new THREE.MeshPhongMaterial({ color: 0xff1493, shininess: 100, specular: 0xff69b4, flatShading: true });
+const meshes3d = [];
+const heartCount3d = window.innerWidth < 768 ? 6 : 12;
+for (let i = 0; i < heartCount3d; i++) {
+    const mesh = new THREE.Mesh(heartGeometry, heartMaterial);
+    mesh.position.set((Math.random() - 0.5) * 50, (Math.random() - 0.5) * 40, (Math.random() - 0.5) * 30 - 10);
+    const sizeScale = Math.random() * 0.2 + 0.15;
+    mesh.scale.set(sizeScale, sizeScale, sizeScale);
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+    mesh.userData = {
+        speedX: (Math.random() - 0.5) * 0.03,
+        speedY: (Math.random() - 0.5) * 0.03,
+        rotX: (Math.random() - 0.5) * 0.015,
+        rotY: (Math.random() - 0.5) * 0.015
+    };
+    scene.add(mesh);
+    meshes3d.push(mesh);
+}
+window.addEventListener('mousemove', (e) => {
+    mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+    mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+window.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 0) {
+        mouseX = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
+        mouseY = -(e.touches[0].clientY / window.innerHeight) * 2 + 1;
+    }
+}, { passive: true });
+function animate3D() {
+    requestAnimationFrame(animate3D);
+    camera.position.x += (mouseX * 4 - camera.position.x) * 0.05;
+    camera.position.y += (mouseY * 4 - camera.position.y) * 0.05;
+    camera.lookAt(scene.position);
+    meshes3d.forEach(m => {
+        m.position.x += m.userData.speedX;
+        m.position.y += m.userData.speedY;
+        m.rotation.x += m.userData.rotX;
+        m.rotation.y += m.userData.rotY;
+        if (m.position.x > 35) m.position.x = -35;
+        if (m.position.x < -35) m.position.x = 35;
+        if (m.position.y > 25) m.position.y = -25;
+        if (m.position.y < -25) m.position.y = 25;
+    });
+    renderer.render(scene, camera);
+}
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
 animate();
+animate3D();
 setTimeout(drawNextChar, 400);

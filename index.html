@@ -2,17 +2,21 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Для Сони</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="canvas-container">
-        <div id="name-tag">Соня</div>
-        <div id="hint-tag">Нажимай на надписи!</div>
         <canvas id="bgCanvas"></canvas>
         <canvas id="heartCanvas"></canvas>
+        <canvas id="canvas3d"></canvas>
+        <div id="name-tag">Соня</div>
+        <div id="counter-tag"></div>
+        <div id="hint-tag">Нажимай на надписи!</div>
     </div>
+    <button id="music-btn">🎵</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
