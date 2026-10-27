@@ -7,6 +7,11 @@ const hintTag = document.getElementById('hint-tag');
 const counterTag = document.getElementById('counter-tag');
 const musicBtn = document.getElementById('music-btn');
 const canvas3d = document.getElementById('canvas3d');
+const reasonTag = document.getElementById('reason-tag');
+const letterBtn = document.getElementById('letter-btn');
+const letterEl = document.getElementById('letter');
+const letterText = document.getElementById('letter-text');
+const letterClose = document.getElementById('letter-close');
 let centerX, centerY, scale;
 let mouseX = 0, mouseY = 0;
 const audio = new Audio('music.mp3');
@@ -39,6 +44,14 @@ let pulseFactor = 1;
 let pulseTime = 0;
 const startDate = new Date(2026, 9, 17, 21, 0, 0);
 const lovePhrases = ["Я тебя люблю", "Ты самая лучшая", "Я люблю тебя сильнее всех на свете", "Я без тебя как луна без земли", "Моё солнце", "Ты моё всё", "Самая милая", "Счастье моё", "Ты моя вселенная", "Самая прекрасная улыбка"];
+const reasons = ["Твоя улыбка делает любой день лучше", "С тобой я чувствую себя дома", "Ты умеешь меня рассмешить", "Твой голос — мой любимый звук", "Ты делаешь меня лучше", "С тобой даже тишина уютная", "Ты просто есть — и этого достаточно для счастья", "В твоих глазах целая галактика", "Ты веришь в меня", "Рядом с тобой время летит незаметно"];
+const letter = "Соня,\n\nЯ долго думал, как рассказать тебе всё, что чувствую, и понял, что обычных слов для этого мало. Поэтому я собрал для тебя целую вселенную.\n\nС тех пор как ты появилась в моей жизни, всё стало ярче: самые обычные дни превратились в маленькие праздники, а будущее перестало пугать, ведь в нём есть ты.\n\nСпасибо тебе за твою улыбку, за твоё тепло и за то, что ты просто рядом. Я хочу быть с тобой и в яркие дни, и в самые простые.\n\nПусть у нас будет ещё очень много общих звёзд.\n\nЯ тебя люблю 💖";
+const milestoneList = [["1 неделя", 0, 7], ["1 месяц", 1, 0], ["100 дней", 0, 100], ["3 месяца", 3, 0], ["полгода", 6, 0], ["1 год", 12, 0], ["2 года", 24, 0], ["3 года", 36, 0], ["5 лет", 60, 0]].map(m => ({ label: m[0], date: new Date(startDate.getFullYear(), startDate.getMonth() + m[1], startDate.getDate() + m[2], 21, 0, 0) })).sort((a, b) => a.date - b.date);
+let foundCount = 0;
+let reasonOrder = [];
+let reasonTimer;
+let letterRead = false;
+let letterTimer = null;
 function pluralize(num, one, two, many) {
     let n = Math.abs(num);
     n %= 100;
@@ -63,7 +76,19 @@ function updateCounter() {
     const hTxt = pluralize(hours, "час", "часа", "часов");
     const mTxt = pluralize(minutes, "минуту", "минуты", "минут");
     const sTxt = pluralize(seconds, "секунду", "секунды", "секунд");
-    counterTag.innerHTML = `Мы вместе уже:<br>${days} ${dTxt}, ${hours} ${hTxt}, ${minutes} ${mTxt} и ${seconds} ${sTxt}`;
+    const upcoming = milestoneList.find(m => m.date.getTime() + 864e5 > now.getTime());
+    let mileTxt = "";
+    if (upcoming) {
+        const left = upcoming.date - now;
+        if (left <= 0) {
+            mileTxt = `Сегодня нам ${upcoming.label} 💖`;
+        } else {
+            const ld = Math.floor(left / 864e5);
+            const lh = Math.floor(left / 36e5) % 24;
+            mileTxt = ld > 0 ? `До отметки «${upcoming.label}» осталось ${ld} ${pluralize(ld, "день", "дня", "дней")}` : `До отметки «${upcoming.label}» осталось ${lh} ${pluralize(lh, "час", "часа", "часов")}`;
+        }
+    }
+    counterTag.innerHTML = `Мы вместе уже:<br>${days} ${dTxt}, ${hours} ${hTxt}, ${minutes} ${mTxt} и ${seconds} ${sTxt}<span class="milestone">${mileTxt}</span>`;
 }
 class BackgroundStar {
     constructor() {
@@ -284,6 +309,7 @@ class FloatingText {
                 const randomIndex = Math.floor(Math.random() * lovePhrases.length);
                 this.text = lovePhrases[randomIndex];
                 this.isLovePhrase = true;
+                registerFound();
                 this.targetScale = this.text.length > 20 ? 1.0 : 1.3;
                 this.vx = (Math.random() - 0.5) * 1.5;
                 this.vy = -(Math.random() * 1.2 + 0.8);
@@ -313,7 +339,52 @@ function checkTextClick(clientX, clientY) {
             break;
         }
     }
+    if (!hit && Math.hypot(clientX - centerX, clientY - centerY) < scale * 10) {
+        showReason();
+        createBurst(centerX, centerY, 18);
+        hit = true;
+    }
     if (!hit) createBurst(clientX, clientY, 6);
+}
+function registerFound() {
+    foundCount++;
+    if (foundCount < 5) {
+        hintTag.textContent = `Нажимай на надписи! ${foundCount}/5`;
+    } else if (foundCount === 5) {
+        letterBtn.classList.add('visible');
+        hintTag.textContent = "Тебе письмо 💌 А сердце тоже можно нажать";
+    }
+}
+function showReason() {
+    if (!reasonOrder.length) reasonOrder = reasons.slice().sort(() => Math.random() - 0.5);
+    reasonTag.textContent = reasonOrder.pop();
+    reasonTag.style.top = centerY + 'px';
+    reasonTag.classList.add('show');
+    clearTimeout(reasonTimer);
+    reasonTimer = setTimeout(() => reasonTag.classList.remove('show'), 3500);
+}
+function finishLetter() {
+    clearInterval(letterTimer);
+    letterTimer = null;
+    letterText.textContent = letter;
+    letterRead = true;
+    letterClose.classList.add('ready');
+}
+function openLetter() {
+    letterEl.classList.add('open');
+    clearInterval(letterTimer);
+    letterTimer = null;
+    letterClose.classList.remove('ready');
+    if (letterRead) {
+        finishLetter();
+        return;
+    }
+    letterText.textContent = "";
+    let i = 0;
+    letterTimer = setInterval(() => {
+        letterText.textContent += letter[i++];
+        if (i >= letter.length) finishLetter();
+    }, 28);
 }
 function toggleMusic() {
     if (!musicStarted) {
@@ -333,6 +404,8 @@ function toggleMusic() {
     }
 }
 musicBtn.onclick = (e) => { e.stopPropagation(); toggleMusic(); };
+letterBtn.onclick = (e) => { e.stopPropagation(); openLetter(); };
+letterEl.onclick = (e) => { e.stopPropagation(); if (letterTimer) finishLetter(); else letterEl.classList.remove('open'); };
 window.addEventListener('click', (e) => {
     if (!musicStarted) { toggleMusic(); }
     if (heartDone) checkTextClick(e.clientX, e.clientY);
@@ -344,6 +417,7 @@ window.addEventListener('mousemove', (e) => {
     }
 });
 window.addEventListener('touchstart', (e) => {
+    if (e.target.closest('button, #letter')) return;
     if (!musicStarted) { toggleMusic(); }
     if (e.touches.length > 0) {
         const t = e.touches[0];

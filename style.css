@@ -124,3 +124,106 @@ canvas {
     50% { opacity: 1; }
     100% { opacity: 0.3; }
 }
+.milestone {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+#reason-tag {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: max-content;
+    max-width: 70vw;
+    padding: 14px 20px;
+    box-sizing: border-box;
+    text-align: center;
+    color: #FFF;
+    font-size: clamp(15px, 4vw, 22px);
+    font-weight: bold;
+    background: rgba(3, 3, 8, 0.75);
+    border: 1px solid #FF69B4;
+    border-radius: 18px;
+    box-shadow: 0 0 20px rgba(255, 20, 147, 0.5);
+    text-shadow: 0 0 8px #FF69B4;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    z-index: 10;
+    pointer-events: none;
+}
+#reason-tag.show { opacity: 1; }
+#letter-btn {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: none;
+    background: rgba(255, 20, 147, 0.15);
+    color: #FFF;
+    border: 2px solid #FF69B4;
+    width: clamp(40px, 12vw, 50px);
+    height: clamp(40px, 12vw, 50px);
+    font-size: clamp(16px, 5vw, 20px);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+    animation: pulseLetter 1.8s infinite ease-in-out;
+}
+#letter-btn.visible { display: flex; }
+#letter {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding-top: 8vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: rgba(3, 3, 8, 0.88);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+    z-index: 200;
+}
+#letter.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+#letter-box {
+    width: min(560px, 88vw);
+    max-height: 80vh;
+    overflow-y: auto;
+    touch-action: pan-y;
+    box-sizing: border-box;
+    padding: 28px;
+    color: #FFE4EE;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(15px, 4vw, 19px);
+    line-height: 1.7;
+    background: rgba(20, 5, 15, 0.6);
+    border: 1px solid #FF69B4;
+    border-radius: 20px;
+    box-shadow: 0 0 30px rgba(255, 20, 147, 0.4);
+}
+#letter-text { white-space: pre-wrap; }
+#letter-close {
+    margin-top: 18px;
+    text-align: center;
+    color: #FFB6C1;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 1s ease;
+}
+#letter-close.ready { opacity: 1; }
+@keyframes pulseLetter {
+    0% { box-shadow: 0 0 6px #FF69B4; transform: scale(1); }
+    50% { box-shadow: 0 0 22px #FF1493; transform: scale(1.1); }
+    100% { box-shadow: 0 0 6px #FF69B4; transform: scale(1); }
+}
